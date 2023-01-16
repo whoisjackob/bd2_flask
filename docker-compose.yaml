@@ -1,0 +1,29 @@
+version: "3.9"
+services:
+  api:
+    container_name: api
+    depends_on:
+      - db
+    build:
+      context: .
+      dockerfile: ./app/Dockerfile
+    environment:
+      URI: ${URI}
+    restart: always
+    ports: 
+      - 5000:5000
+    volumes:
+      - ./app:/app
+    command: bash -c "./wait-for-it.sh db:7687 -- flask run -h 0.0.0.0 -p 5000"
+  db:
+    image: neo4j:latest
+    environment:
+      NEO4J_AUTH: none
+    ports:
+      - 7687:7687
+      - 7474:7474
+    volumes:
+      - ./neo4j/data:/data
+      - ./neo4j/logs:/logs
+      - ./neo4j/import:/var/lib/neo4j/import
+      - ./neo4j/plugins:/plugins
