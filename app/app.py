@@ -13,7 +13,7 @@ app = Flask(__name__)
 uri = os.getenv("URI")
 driver = GraphDatabase.driver(uri)
 
-# Create labels for Employee and Department [works]
+# Create labels for Employee and Department
 @app.route("/create_labels", methods=["GET"])
 def create_labels():
     with driver.session() as session:
@@ -22,7 +22,7 @@ def create_labels():
     return "Labels created!"
 
 
-# Create relationships between Employee and Department [works]
+# Create relationships between Employee and Department
 @app.route("/create_relationships", methods=["GET"])
 def create_relationships():
     with driver.session() as session:
@@ -31,7 +31,7 @@ def create_relationships():
     return "Relationships created!"
 
 
-# Add data to the database [works]
+# Add data to the database
 @app.route("/add_data", methods=["GET"])
 def add_data():
     with driver.session() as session:
@@ -56,7 +56,7 @@ def add_data():
     return "Data added!"
 
 
-# Get all employees and optionally filter by name, title, and sort by name or title [works]
+# Get all employees and optionally filter by name, title, and sort by name or title
 @app.route("/employees", methods=["GET"])
 def get_employees():
     name = request.args.get("name")
@@ -108,7 +108,7 @@ def add_employee():
         return jsonify({"message": "Employee added successfully"})
 
 
-# Update an employee [works]
+# Update an employee
 @app.route("/employees/<id>", methods=["PUT"])
 def update_employee(id):
     data = request.get_json()
@@ -135,7 +135,7 @@ def update_employee(id):
         return jsonify({"message": "Employee updated successfully"})
 
 
-# Delete an employee [in progress]
+# Delete an employee
 @app.route("/employees/<id>", methods=["DELETE"])
 def delete_employee(id):
     with driver.session() as session:
@@ -143,26 +143,42 @@ def delete_employee(id):
         if not result.single():
             return jsonify({"error": "Employee not found"}), 404
         result = session.run(
-            f"MATCH (e:Employee)-[r:MANAGES]->(d:Department) WHERE ID(e) = {id} RETURN d"
+            f"MATCH (e:Employee)-[r:MANAGES]->(d:Department) WHERE ID(e) = {id} RETURN d as d, e as e, id(e) as id"
         )
-        if result.single():
-            department = result.single()["d"].properties["name"]
+        logger.info(result.data()[0]["e"]["title"])
+        if result.data()[0]["e"]["title"] == "Manager":
+            # delete employee and department
+            deleted = session.run(
+                f"MATCH (e:Employee)-[r:MANAGES]->(d:Department) WHERE ID(e) = {id} DELETE e, r, d"
+            )
+            return jsonify({"message": "Employee and department deleted successfully"})
+        else:
+            # just delete the employee
+            deleted = session.run(f"MATCH (e:Employee) WHERE ID(e) = {id} DELETE e")
+            return jsonify({"message": "Employee deleted successfully"})
 
 
-# List of subordinates [works]
+# List of subordinates
 @app.route("/employees/<id>/subordinates", methods=["GET"])
 def get_subordinates(id):
     with driver.session() as session:
         result = session.run(
-            f"MATCH (e:Employee)-[r:MANAGES]->(s:Employee) WHERE ID(e) = {id} RETURN s"
+            f"MATCH (e:Employee)-[r:MANAGES]->(s:Employee) WHERE ID(e) = {id} RETURN s as s, id(s) as id"
         )
-        subordinates = []
-        for record in result:
-            subordinates.append(record["s"].properties)
-        return jsonify(subordinates)
+        logger.info(result.data())
+        x = [
+            dict(
+                chain.from_iterable(
+                    d.items() for d in (record["s"], {"id": record["id"]})
+                )
+            )
+            for record in result.data()
+            if record["s"] != {}
+        ]
+        return jsonify(x)
 
 
-# All departments with filtering and sorting [in_progress]
+# All departments with filtering and sorting
 @app.route("/departments", methods=["GET"])
 def get_departments():
     name = request.args.get("name")
@@ -179,13 +195,18 @@ def get_departments():
     with driver.session() as session:
         result = session.run(query)
         x = [
-            dict(
-                chain.from_iterable(
-                    d.items() for d in (record["d"], {"id": record["id"]})
+            department
+            for department in [
+                dict(
+                    chain.from_iterable(
+                        d.items()
+                        for d in (item["d"], {"id": item["id"]})
+                        if item["d"] != {}
+                    )
                 )
-            )
-            for record in result.data()
-            if record["d"] != {}
+                for item in result.data()
+            ]
+            if department != {}
         ]
         return jsonify(x)
 
@@ -195,8 +216,9 @@ def get_departments():
 def get_department_employees(id):
     with driver.session() as session:
         result = session.run(
-            f"MATCH (d:Department)-[r:WORKS_IN]->(e:Employee) WHERE ID(d) = {id} RETURN e as e, id(e) as id"
+            f"MATCH (e:Employee)-[r:WORKS_IN]->(d:Department) WHERE ID(d) = {id} RETURN e as e, id(e) as id"
         )
+        logger.info(result.data())
         x = [
             dict(
                 chain.from_iterable(
@@ -204,7 +226,6 @@ def get_department_employees(id):
                 )
             )
             for record in result.data()
-            if record["e"] != {}
         ]
         return jsonify(x)
 

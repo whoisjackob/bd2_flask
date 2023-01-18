@@ -2,13 +2,9 @@
 
 ## Getting Started
 
-The application is deployed and hosted on:
-
-    http://x
-
 All endpoints are available and described in the app.py file  
 First 3 endpoints were used to load some data and create relationships, you don't have to use them again.
-You can run the app using `docker-compose up --build` command and point requests to `localhost:5000` or `x` because the app is deployed there.
+You can run the app using `docker-compose up --build` command and point requests to `localhost:5000`.
 
 ## Add a new Employee
 
@@ -37,3 +33,7 @@ To use filter on all endpoints
 ## List of Departments
 
     curl -X GET http://localhost:5000/departments
+
+## Employees in a department 
+
+    curl -X GET http://localhost:5000/departments/<id>/employees
